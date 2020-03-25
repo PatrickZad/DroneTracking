@@ -5,3 +5,4 @@
 *.weights
 *.png
 *.pyc
+/tracking/model_data/events*
