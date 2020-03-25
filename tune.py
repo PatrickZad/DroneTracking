@@ -35,7 +35,7 @@ def train(is_coarse_available=False):
     num_classes = len(class_names)
     anchors = get_anchors(anchors_path)
 
-    input_shape = (736, 864)  # multiple of 32, hw
+    input_shape = (672, 928)  # multiple of 32, hw
     if is_coarse_available:
         model_path = coarse_model_path
     else:
@@ -44,7 +44,7 @@ def train(is_coarse_available=False):
                          freeze_body=2, weights_path=model_path)  # make sure you know what you freeze
 
     logging = TensorBoard(log_dir=model_base)
-    checkpoint = ModelCheckpoint(model_base + '/' + 'ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5',
+    checkpoint = ModelCheckpoint(os.path.join(model_base , 'ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5'),
                                  monitor='val_loss', save_weights_only=True, save_best_only=True, period=5)
     reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3, verbose=1)
     early_stopping = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=1)
@@ -67,7 +67,7 @@ def train(is_coarse_available=False):
                             epochs=50,
                             initial_epoch=0,
                             callbacks=[logging, checkpoint])
-        model.save_weights(model_base + '/' + 'trained_weights_stage_1.h5')
+        # model.save_weights(os.path.join(model_base ,'trained_weights_stage_1.h5'))
 
     # Unfreeze and continue training, to fine-tune.
     for i in range(len(model.layers)):
@@ -86,7 +86,7 @@ def train(is_coarse_available=False):
                         epochs=100,
                         initial_epoch=50,
                         callbacks=[logging, checkpoint, reduce_lr, early_stopping])
-    model.save_weights(model_base + '/' + 'trained_weights_final.h5')
+    # model.save_weights(os.path.join(model_base , 'trained_weights_final.h5'))
 
     # Further training if needed.
 
