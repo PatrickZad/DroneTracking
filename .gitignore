@@ -4,5 +4,6 @@
 *.h5
 *.weights
 *.png
+*.pdf
 *.pyc
 /tracking/model_data/events*
