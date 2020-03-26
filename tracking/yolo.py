@@ -151,17 +151,22 @@ class YOLO:
         scores_ = []
         classes_ = []
         for c in range(num_classes):
-            class_boxes = None
+            class_boxes = box_scores[objectness_mask[:, c]]
+            class_box_scores = box_scores[:, c][objectness_mask[:, c]]
 
     def __boxes_and_scores(self, output, anchors, num_classes, input_shape, image_shape):
         '''Equal to yolo_boxes_and_scores'''
         box_xy, box_wh, box_confidence, box_class_probs = self.__split_out(output, anchors, num_classes, input_shape)
-        pass
+        boxes = self.__correct_boxes(box_xy, box_wh, input_shape, image_shape)  # min-max boxes
+        boxes = boxes.reshape([-1, 4])
+        box_scores = box_confidence * box_class_probs
+        box_scores = box_scores.reshape([-1, num_classes])
+        return boxes, box_scores
 
     def __split_out(self, output, anchors, num_classes, input_shape):
         '''Equal to yolo_head'''
         num_achors = len(anchors)
-        achor_array = np.array(anchors).reshape((1, 1, 1, num_achors, 2))
+        anchor_array = np.array(anchors).reshape((1, 1, 1, num_achors, 2))
         grid_shape = output.shape[1:3]
         grid_y = np.tile(np.arange(0, stop=grid_shape[0]).reshape(-1, 1, 1, 1), [1, grid_shape[1], 1, 1])
         grid_x = np.tile(np.arange(0, stop=grid_shape[1]).reshape([1, -1, 1, 1]), [grid_shape[0], 1, 1, 1])
@@ -172,3 +177,88 @@ class YOLO:
         box_wh = np.exp(ordered_output[..., 2:4])
         box_confidence = 1 / (1 + np.exp(output[..., 4:5]))
         box_class_probs = 1 / (1 + np.exp(output[..., 5:]))
+
+        box_xy = (box_xy + grid) / np.float32(grid_shape[::-1])
+        box_wh = box_wh * anchor_array / np.float32(input_shape[::-1])
+        return box_xy, box_wh, box_confidence, box_class_probs
+
+    def __correct_boxes(self, box_xy, box_wh, input_shape, image_shape):
+        '''Equal to yolo_correct_boxes'''
+        box_yx = box_xy[..., ::-1]
+        box_hw = box_wh[..., ::-1]
+        input_shape = np.float32(input_shape)
+        image_shape = np.float32(image_shape)
+        new_shape = np.round(image_shape * np.min(input_shape / image_shape))
+        offset = (input_shape - new_shape) / 2. / input_shape
+        scale = input_shape / new_shape  # deal with random scale in data augmentation
+        box_yx = (box_yx - offset) * scale  # correct to input_shape scale
+        box_hw *= scale
+
+        box_mins = box_yx - (box_hw / 2.)
+        box_maxes = box_yx + (box_hw / 2.)
+        # TODO chang max-mins to cornor-size
+        boxes = np.concatenate([
+            box_mins[..., 0:1],  # y_min
+            box_mins[..., 1:2],  # x_min
+            box_maxes[..., 0:1],  # y_max
+            box_maxes[..., 1:2]  # x_max
+        ], axis=-1)
+        boxes *= np.concatenate([image_shape, image_shape], axis=-1)
+        return boxes
+
+
+def non_max_suppression_fast(boxes, iou_threshold):
+    # if there are no boxes, return an empty list
+    if len(boxes) == 0:
+        return []
+
+    # if the bounding boxes integers, convert them to floats --
+    # this is important since we'll be doing a bunch of divisions
+    if boxes.dtype.kind == "i":
+        boxes = boxes.astype("float")
+
+    # initialize the list of picked indexes
+    pick = []
+
+    # grab the coordinates of the bounding boxes
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
+
+    # compute the area of the bounding boxes and sort the bounding
+    # boxes by the bottom-right y-coordinate of the bounding box
+    area = (x2 - x1 + 1) * (y2 - y1 + 1)
+    idxs = np.argsort(y2)
+
+    # keep looping while some indexes still remain in the indexes
+    # list
+    while len(idxs) > 0:
+        # grab the last index in the indexes list and add the
+        # index value to the list of picked indexes
+        last = len(idxs) - 1
+        i = idxs[last]
+        pick.append(i)
+
+        # find the largest (x, y) coordinates for the start of
+        # the bounding box and the smallest (x, y) coordinates
+        # for the end of the bounding box
+        xx1 = np.maximum(x1[i], x1[idxs[:last]])
+        yy1 = np.maximum(y1[i], y1[idxs[:last]])
+        xx2 = np.minimum(x2[i], x2[idxs[:last]])
+        yy2 = np.minimum(y2[i], y2[idxs[:last]])
+
+        # compute the width and height of the bounding box
+        w = np.maximum(0, xx2 - xx1 + 1)
+        h = np.maximum(0, yy2 - yy1 + 1)
+
+        # compute the ratio of overlap
+        overlap = (w * h) / area[idxs[:last]]
+
+        # delete all indexes from the index list that have
+        idxs = np.delete(idxs, np.concatenate(([last],
+                                               np.where(overlap > iou_threshold)[0])))
+
+    # return only the bounding boxes that were picked using the
+    # integer data type
+    return boxes[pick].astype("int")
