@@ -24,8 +24,8 @@ train_anno_dir = os.path.join(train_data_dir, 'annotations')
 val_img_dir = os.path.join(val_data_dir, 'images')
 val_anno_dir = os.path.join(val_data_dir, 'annotations')
 model_base = os.path.join(cwd, 'tracking/model_data')
-origin_model_path = os.path.join(model_base, 'ep005-loss118.937-val_loss128.925.h5')
-coarse_model_path = os.path.join(model_base, 'ep055-loss84.211-val_loss104.474.h5')
+origin_model_path = os.path.join(model_base, 'yolo.h5')
+coarse_model_path = os.path.join(model_base, 'trained_weights_stage_1.h5')
 
 
 def train(is_coarse_available=False):
@@ -211,4 +211,4 @@ def parse_anno(anno_dir, fileid):
 
 
 if __name__ == '__main__':
-    train(True)
+    train()
