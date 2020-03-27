@@ -99,16 +99,17 @@ def get_random_data(img, annoarray, input_shape, random=True, max_boxes=20, jitt
     if len(annoarray) > 0:
         np.random.shuffle(annoarray)
         # correction for resize
-        annoarray[:, 0] = annoarray[:, 0] * scale_factor + w_offset
-        annoarray[:, 1:4] = annoarray[:, 1:4] * scale_factor
-        if flip:
-            annoarray[:, 0] = w - annoarray[:, 0]
+        annoarray[:, [0, 2]] = annoarray[:, [0, 2]] * scale_factor - w_offset
+        annoarray[:, [1, 3]] = annoarray[:, [1, 3]] * scale_factor
+        annoarray = annoarray[annoarray[:, 2] > 0]  # remove x_max<=0
         annoarray[:, 0:2][annoarray[:, 0:2] < 0] = 0
-        annoarray[:, 2][annoarray[:, 0] + annoarray[:, 2] > width_limit - 1] = width_limit - annoarray[:, 0][
-            annoarray[:, 0] + annoarray[:, 2] > width_limit - 1]
-        annoarray[:, 3][annoarray[:, 1] + annoarray[:, 3] > h - 1] = h - annoarray[:, 1][
-            annoarray[:, 1] + annoarray[:, 3] > h - 1]
-        annoarray = annoarray[np.logical_and(annoarray[:, 2] > 1, annoarray[:, 3] > 1)]  # discard invalid annoarray
+        annoarray[:, 2][annoarray[:, 2] > width_limit - 1] = width_limit
+        annoarray[:, 3][annoarray[:, 3] > h - 1] = h-1
+        if flip:
+            annoarray[:, [0, 2]] = w - annoarray[:, [2, 0]]
+        annoarray_w = annoarray[:, 2] - annoarray[:, 0]
+        annoarray_h = annoarray[:, 3] - annoarray[:, 1]
+        annoarray = annoarray[np.logical_and(annoarray_w > 1, annoarray_h > 1)]  # discard invalid annoarray
         if len(annoarray) > max_boxes:
             annoarray = annoarray[:max_boxes]
         box_data[:len(annoarray)] = annoarray

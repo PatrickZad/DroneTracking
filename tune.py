@@ -200,6 +200,9 @@ def parse_anno(anno_dir, fileid):
                 nums.append(int(str_num))
             if nums[4] != 1 or nums[5] == 0:
                 continue
+                # chang to min-max box
+            nums[2] += nums[0]
+            nums[3] += nums[1]
             nums[5] -= 1
             anno = nums[:4]
             anno.append(nums[5])
