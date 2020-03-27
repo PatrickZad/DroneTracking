@@ -53,7 +53,7 @@ class SequenceReader:
         return self.__size
 
     @staticmethod
-    def __filename(self, index):
+    def __filename(index):
         str_num = str(index)
         while len(str_num) < 7:
             str_num = '0' + str_num
@@ -93,7 +93,7 @@ for seq_dir in dirs:
     for (frame, filename) in frame_reader:
         frame = cv.imread(os.path.join(frames_dir, filename))
         img = Image.fromarray(frame)
-        raw_detections, raw_classifications = detector.detect_image(img)
+        raw_detections, raw_scores, raw_classifications = detector.detect_image(img)
         apperance_features = apperance_model(frame, raw_detections)
         detections = [Detection(bbox, 1.0, feature) for bbox, feature in zip(raw_detections, apperance_features)]
         # Run non-maxima suppression.
