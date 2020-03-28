@@ -65,14 +65,14 @@ def train(is_coarse_available=False):
                                                           num_classes),
                             validation_steps=max(1, num_val // batch_size),
                             epochs=50,
-                            initial_epoch=5,
+                            initial_epoch=0,
                             callbacks=[logging, checkpoint])
         model.save_weights(os.path.join(model_base ,'trained_weights_stage_1.h5'))
 
     # Unfreeze and continue training, to fine-tune.
     for i in range(len(model.layers)):
         model.layers[i].trainable = True
-    model.compile(optimizer=Adam(lr=1e-4),
+    model.compile(optimizer=Adam(lr=1e-6),
                   loss={'yolo_loss': lambda y_true, y_pred: y_pred})  # recompile to apply the change
     print('Unfreeze all of the layers.')
 
@@ -84,7 +84,7 @@ def train(is_coarse_available=False):
                                                       num_classes),
                         validation_steps=max(1, num_val // batch_size),
                         epochs=100,
-                        initial_epoch=55,
+                        initial_epoch=50,
                         callbacks=[logging, checkpoint, reduce_lr, early_stopping])
     model.save_weights(os.path.join(model_base , 'trained_weights_final.h5'))
 
@@ -211,4 +211,4 @@ def parse_anno(anno_dir, fileid):
 
 
 if __name__ == '__main__':
-    train()
+    train(True)

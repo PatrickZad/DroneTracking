@@ -1,4 +1,5 @@
 import os
+#os.environ['CUDA_VISIBLE_DEVICES']='-1'
 import numpy as np
 import cv2 as cv
 
@@ -69,8 +70,8 @@ nms_max_overlap = 1.0
 
 # deep_sort
 model_base = os.path.join(cwd, 'tracking', 'model_data')
-yolo_file = os.path.join(model_base, 'trained_weights_stage_1.h5')
-# yolo_file = os.path.join(model_base, 'trained_weights_final.h5')
+#yolo_file = os.path.join(model_base, 'trained_weights_stage_1.h5')
+yolo_file = os.path.join(model_base, 'trained_weights_final.h5')
 # yolo_file = os.path.join(model_base, 'yolo.h5')
 anchor_file = os.path.join(model_base, 'yolo_anchors.txt')
 class_file = os.path.join(model_base, 'visdrone_classes.txt')
@@ -82,7 +83,7 @@ apperance_metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosin
 tracker = Tracker(apperance_metric)
 dirs = os.listdir(val_sequences_dir)
 for seq_dir in dirs:
-    frames_dir = os.path.join(val_sequences_dir, dir)
+    frames_dir = os.path.join(val_sequences_dir, seq_dir)
     frame_reader = SequenceReader(frames_dir)
     if write_video:
         fourcc = cv.VideoWriter_fourcc(*'MJPG')
@@ -113,7 +114,7 @@ for seq_dir in dirs:
         for det, cla in zip(detections, raw_classifications):
             bbox = det.to_tlbr()
             cv.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (255, 0, 0), 2)
-        cv.imwrite(os.path.join(expr_dir, filename), frame)
+        #cv.imwrite(os.path.join(expr_dir, filename), frame)
         # cv.imshow('', frame)
         if write_video:
             writer.write(frame)
