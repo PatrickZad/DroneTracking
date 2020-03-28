@@ -35,7 +35,7 @@ def train(is_coarse_available=False):
     num_classes = len(class_names)
     anchors = get_anchors(anchors_path)
 
-    input_shape = (672, 928)  # multiple of 32, hw
+    input_shape = (672, 992)  # multiple of 32, hw
     if is_coarse_available:
         model_path = coarse_model_path
     else:
@@ -184,7 +184,7 @@ def data_augment(img_dir, anno_dir, fileid, input_shape):
     img = np.float32(img)
     anno_array = parse_anno(anno_dir, fileid)
     anno_array = np.array(anno_array)
-    image, box = get_random_data(img, anno_array, input_shape, random=True)
+    image, box = get_random_data(img, anno_array, input_shape, random=True, max_boxes=128)
     return image, box
 
 
@@ -211,4 +211,4 @@ def parse_anno(anno_dir, fileid):
 
 
 if __name__ == '__main__':
-    train()
+    train(True)

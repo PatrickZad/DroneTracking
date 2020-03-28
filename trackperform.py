@@ -81,7 +81,7 @@ detector = YOLO(yolo_file, anchor_file, class_file, is_weights=True)
 apperance_metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
 tracker = Tracker(apperance_metric)
 dirs = os.listdir(val_sequences_dir)
-for seq_dir in dirs:
+for seq_dir in dirs[::-1]:
     frames_dir = os.path.join(val_sequences_dir, seq_dir)
     frame_reader = SequenceReader(frames_dir)
 
@@ -114,7 +114,7 @@ for seq_dir in dirs:
         for det, cla in zip(detections, raw_classifications):
             bbox = det.to_tlbr()
             cv.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (255, 0, 0), 2)
-        cv.imwrite(os.path.join(expr_dir, filename), frame)
+        # cv.imwrite(os.path.join(expr_dir, filename), frame)
         # cv.imshow('', frame)
         if write_video:
             writer.write(frame)
