@@ -103,7 +103,7 @@ def parse_seq_anno_for_det(anno_dict, file_id):
     anno_array = np.concatenate(annos, axis=0)
     anno_array[:, 2] += anno_array[:, 0]
     anno_array[:, 3] += anno_array[:, 1]
-    anno_array[:, 4] -= 1
+    # anno_array[:, 4] -= 1
     return anno_array
 
 
