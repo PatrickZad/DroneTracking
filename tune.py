@@ -25,7 +25,7 @@ def train(is_coarse_available=False):
     num_classes = len(class_names)
     anchors = get_anchors(anchors_path)
 
-    input_shape = (672, 992)  # multiple of 32, hw
+    input_shape = (544, 864)  # multiple of 32, hw
     if is_coarse_available:
         model_path = coarse_model_path
     else:

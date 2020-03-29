@@ -100,10 +100,10 @@ def parse_det_anno(anno_dir, fileid):
 
 def parse_seq_anno_for_det(anno_dict, file_id):
     annos = anno_dict[file_id[0]][file_id[1]]
-    anno_array = np.concatenate(annos,axis=0)
+    anno_array = np.concatenate(annos, axis=0)
     anno_array[:, 2] += anno_array[:, 0]
     anno_array[:, 3] += anno_array[:, 1]
-    anno_array[:,4]-=1
+    anno_array[:, 4] -= 1
     return anno_array
 
 
@@ -115,7 +115,7 @@ def all_seq_ids(phase='train'):
         seq_dir = mot_val_seq_dir
     result = []
     for vdir in os.listdir(seq_dir):
-        for i in range(1, len(os.listdir(os.path.join(seq_dir, vdir)))+1):
+        for i in range(1, len(os.listdir(os.path.join(seq_dir, vdir))) + 1):
             result.append((vdir, i))
     return result
 
@@ -161,13 +161,11 @@ def all_seq_annos(phase='train'):
             for line in lines:
                 i += 1
                 nums = line.split(',')
-                if nums[7] == '0' or nums[9] == '2':
-                    continue
                 id_num = int(nums[0])
                 anno_num = np.int32([nums[2], nums[3], nums[4], nums[5], nums[7]])
                 vanno_dict[id_num].append(anno_num.reshape((1, 5)))
         anno_dict[vid] = vanno_dict
-        #print('load anno: ' + vid)
+        # print('load anno: ' + vid)
     return anno_dict
 
 
@@ -222,23 +220,23 @@ def cluster_anchors(boxes, k, dist=np.median):
     np.random.seed()
     clusters = boxes[np.random.choice(
         box_number, k, replace=False)]  # init k clusters
-    turn=0
+    turn = 0
     while True:
 
-        distances = 1 - iou4array(boxes, clusters,k)
+        distances = 1 - iou4array(boxes, clusters, k)
 
         current_nearest = np.argmin(distances, axis=1)
         if (last_nearest == current_nearest).all():
             break  # clusters won't change
-        last_clusters=clusters.copy()
+        last_clusters = clusters.copy()
         for cluster in range(k):
             clusters[cluster] = dist(  # update clusters
                 boxes[current_nearest == cluster], axis=0)
-        if turn%50==0:
-            delta=clusters-last_clusters
-            print('turn: '+str(turn))
+        if turn % 50 == 0:
+            delta = clusters - last_clusters
+            print('turn: ' + str(turn))
             print(delta)
-        turn+=1
+        turn += 1
         last_nearest = current_nearest
 
     return clusters
@@ -271,8 +269,8 @@ def iou4array(boxes, cluster_centers, k):
 if __name__ == '__main__':
     boxes_dict = all_seq_annos()
     all_boxes = []
-    for vid,frame_boxes_dict in boxes_dict.items():
-        for id,boxes in frame_boxes_dict.items():
+    for vid, frame_boxes_dict in boxes_dict.items():
+        for id, boxes in frame_boxes_dict.items():
             array = np.concatenate(boxes, axis=0)
             all_boxes.append(array[:, :-1])
     anno_array = np.concatenate(all_boxes, axis=0)

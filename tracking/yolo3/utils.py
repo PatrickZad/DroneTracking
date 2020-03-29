@@ -42,8 +42,16 @@ def get_random_data(img, annoarray, input_shape, random=True, max_boxes=20, jitt
     ih, iw = img.shape[:-1]
     h, w = input_shape
     # resize image
-    scale_factor = h / ih
-    image = cv.resize(img, dsize=(int(iw * scale_factor), h))
+    scale_factor = min(h / ih, w / iw)
+    image = cv.resize(img, dsize=(int(iw * scale_factor), int(ih * scale_factor)))
+    h_offset = (h - image.shape[0]) // 2
+    w_offset = (w - image.shaoe[1]) // 2
+    height_limit = h_offset + image.shape[0]
+    width_limit = w_offset + image.shape[1]
+    image = cv.copyMakeBorder(image, top=h_offset, bottom=input_shape[0] - height_limit,
+                              left=w_offset, right=input_shape[1] - width_limit, borderType=cv.BORDER_CONSTANT,
+                              value=(128, 128))
+    '''
     scaled_width = image.shape[1]
     width_limit = min(scaled_width, w)
     w_diff = scaled_width - w
@@ -53,7 +61,7 @@ def get_random_data(img, annoarray, input_shape, random=True, max_boxes=20, jitt
         image = image[:, w_offset:w_offset + w, :].copy()
     elif w_diff < 0:
         image = cv.copyMakeBorder(image, 0, 0, 0, -w_diff, borderType=cv.BORDER_CONSTANT, value=(128, 128, 128))
-    '''
+    
     new_ar = w / h * rand(1 - jitter, 1 + jitter) / rand(1 - jitter, 1 + jitter)
     scale = rand(.25, 2)
     if new_ar < 1:
@@ -99,12 +107,12 @@ def get_random_data(img, annoarray, input_shape, random=True, max_boxes=20, jitt
     if len(annoarray) > 0:
         np.random.shuffle(annoarray)
         # correction for resize
-        annoarray[:, [0, 2]] = annoarray[:, [0, 2]] * scale_factor - w_offset
-        annoarray[:, [1, 3]] = annoarray[:, [1, 3]] * scale_factor
-        annoarray = annoarray[annoarray[:, 2] > 0]  # remove x_max<=0
+        annoarray[:, [0, 2]] = annoarray[:, [0, 2]] * scale_factor + w_offset
+        annoarray[:, [1, 3]] = annoarray[:, [1, 3]] * scale_factor + h_offset
+        annoarray = annoarray[np.logical_and(annoarray[:, 2] > 0, annoarray[:, 3] > 0)]  # remove x_max<=0 or y_max<=0
         annoarray[:, 0:2][annoarray[:, 0:2] < 0] = 0
-        annoarray[:, 2][annoarray[:, 2] > width_limit - 1] = width_limit
-        annoarray[:, 3][annoarray[:, 3] > h - 1] = h-1
+        annoarray[:, 2][annoarray[:, 2] > width_limit - 1] = width_limit - 1
+        annoarray[:, 3][annoarray[:, 3] > height_limit - 1] = height_limit - 1
         if flip:
             annoarray[:, [0, 2]] = w - annoarray[:, [2, 0]]
         annoarray_w = annoarray[:, 2] - annoarray[:, 0]

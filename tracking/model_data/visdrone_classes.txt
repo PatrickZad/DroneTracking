@@ -1,3 +1,4 @@
+ignored regions
 pedestrian
 people
 bicycle
