@@ -68,7 +68,7 @@ def seq_data_augment_for_det(fileid, input_shape, seq_annos, phase='train'):
     img_name = str(fileid[1])
     while len(img_name) < 7:
         img_name = '0' + img_name
-    img = cv.imread(seq_base, fileid[0], img_name + '.jpg')
+    img = cv.imread(os.path.join(seq_base, fileid[0], img_name + '.jpg'))
     img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
     img = np.float32(img)
     anno_array = parse_seq_anno_for_det(seq_annos, fileid)
@@ -100,9 +100,10 @@ def parse_det_anno(anno_dir, fileid):
 
 def parse_seq_anno_for_det(anno_dict, file_id):
     annos = anno_dict[file_id[0]][file_id[1]]
-    anno_array = np.array(annos)
+    anno_array = np.concatenate(annos,axis=0)
     anno_array[:, 2] += anno_array[:, 0]
     anno_array[:, 3] += anno_array[:, 1]
+    anno_array[:,4]-=1
     return anno_array
 
 
@@ -114,7 +115,7 @@ def all_seq_ids(phase='train'):
         seq_dir = mot_val_seq_dir
     result = []
     for vdir in os.listdir(seq_dir):
-        for i in range(1, len(os.listdir(os.path.join(seq_dir, vdir)))):
+        for i in range(1, len(os.listdir(os.path.join(seq_dir, vdir)))+1):
             result.append((vdir, i))
     return result
 
@@ -166,12 +167,12 @@ def all_seq_annos(phase='train'):
                 anno_num = np.int32([nums[2], nums[3], nums[4], nums[5], nums[7]])
                 vanno_dict[id_num].append(anno_num.reshape((1, 5)))
         anno_dict[vid] = vanno_dict
-        print('load anno: ' + vid)
+        #print('load anno: ' + vid)
     return anno_dict
 
 
-def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, file_ids=None):
-    if file_ids is None:
+def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, fileids=None):
+    if fileids is None:
         fileids = all_seq_ids()
     n = len(fileids)
     i = 0
@@ -192,8 +193,8 @@ def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, f
         yield [image_data, *y_true], np.zeros(batch_size)
 
 
-def seq_val_for_det_generator(batch_size, input_shape, anchors, num_classes, file_ids=None):
-    if file_ids is None:
+def seq_val_for_det_generator(batch_size, input_shape, anchors, num_classes, fileids=None):
+    if fileids is None:
         fileids = all_seq_ids('val')
     n = len(fileids)
     i = 0
@@ -221,39 +222,45 @@ def cluster_anchors(boxes, k, dist=np.median):
     np.random.seed()
     clusters = boxes[np.random.choice(
         box_number, k, replace=False)]  # init k clusters
+    turn=0
     while True:
 
-        distances = 1 - iou4array(boxes, clusters)
+        distances = 1 - iou4array(boxes, clusters,k)
 
         current_nearest = np.argmin(distances, axis=1)
         if (last_nearest == current_nearest).all():
             break  # clusters won't change
+        last_clusters=clusters.copy()
         for cluster in range(k):
             clusters[cluster] = dist(  # update clusters
                 boxes[current_nearest == cluster], axis=0)
-
+        if turn%50==0:
+            delta=clusters-last_clusters
+            print('turn: '+str(turn))
+            print(delta)
+        turn+=1
         last_nearest = current_nearest
+
     return clusters
 
 
 def iou4array(boxes, cluster_centers, k):
     # return a n*k iou matrix
     n = boxes.shape[0]
-    box_area = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    box_area = boxes[:, 2] * boxes[:, 3]
     box_area = box_area.repeat(k)
     box_area = np.reshape(box_area, (n, k))
 
-    cluster_area = (cluster_centers[:, 2] - cluster_centers[:, 0]) * \
-                   (cluster_centers[:, 3] - cluster_centers[:, 1])
+    cluster_area = cluster_centers[:, 2] * cluster_centers[:, 3]
     cluster_area = np.tile(cluster_area, [1, n])
     cluster_area = np.reshape(cluster_area, (n, k))
 
     box_w_matrix = np.reshape((boxes[:, 2] - boxes[:, 0]).repeat(k), (n, k))
-    cluster_w_matrix = np.reshape(np.tile(cluster_centers[:, 2] - cluster_centers[:, 0], (1, n)), (n, k))
+    cluster_w_matrix = np.reshape(np.tile(cluster_centers[:, 2], (1, n)), (n, k))
     min_w_matrix = np.minimum(cluster_w_matrix, box_w_matrix)
 
-    box_h_matrix = np.reshape(boxes[:, 1].repeat(k), (n, k))
-    cluster_h_matrix = np.reshape(np.tile(cluster_centers[:, 3] - cluster_centers[:, 1], (1, n)), (n, k))
+    box_h_matrix = np.reshape(boxes[:, 3].repeat(k), (n, k))
+    cluster_h_matrix = np.reshape(np.tile(cluster_centers[:, 3], (1, n)), (n, k))
     min_h_matrix = np.minimum(cluster_h_matrix, box_h_matrix)
     inter_area = np.multiply(min_w_matrix, min_h_matrix)
 
@@ -264,8 +271,8 @@ def iou4array(boxes, cluster_centers, k):
 if __name__ == '__main__':
     boxes_dict = all_seq_annos()
     all_boxes = []
-    for frame_boxes_dict in boxes_dict.values():
-        for boxes in frame_boxes_dict.values():
+    for vid,frame_boxes_dict in boxes_dict.items():
+        for id,boxes in frame_boxes_dict.items():
             array = np.concatenate(boxes, axis=0)
             all_boxes.append(array[:, :-1])
     anno_array = np.concatenate(all_boxes, axis=0)
