@@ -2,6 +2,7 @@ import os
 #os.environ['CUDA_VISIBLE_DEVICES']='-1'
 import numpy as np
 import cv2 as cv
+from common import *
 
 from tracking.yolo import YOLO
 from tracking.deep_sort import preprocessing
@@ -18,11 +19,7 @@ tensorflow==1.4.0 or tensorflow-gpu==1.4.0 with cuda8.0 and cudnn6.0
 opencv-contrib-python==3.4.2.17
 keras=2.1.5
 '''
-cwd = os.getcwd()
-common_dir = os.path.dirname(cwd)
-dataset_dir = os.path.join(common_dir, 'Datasets', 'VisDrone')
-expr_dir = os.path.join(cwd, 'experiments')
-val_sequences_dir = os.path.join(dataset_dir, 'VisDrone2019-VID_MOT-val', 'sequences')
+val_sequences_dir = os.path.join(visdrone_dataset_dir, 'VisDrone2019-VID_MOT-val', 'sequences')
 
 
 class SequenceReader:
@@ -82,7 +79,7 @@ detector = YOLO(yolo_file, anchor_file, class_file, is_weights=True)
 apperance_metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
 tracker = Tracker(apperance_metric)
 dirs = os.listdir(val_sequences_dir)
-for seq_dir in dirs:
+for seq_dir in dirs[::-1]:
     frames_dir = os.path.join(val_sequences_dir, seq_dir)
     frame_reader = SequenceReader(frames_dir)
     if write_video:

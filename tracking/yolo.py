@@ -81,7 +81,7 @@ class YOLO:
                                            score_threshold=self.score, iou_threshold=self.iou,max_boxes=128)
         return boxes, scores, classes
 
-    def detect_image(self, image, max_boxes=20):
+    def detect_image(self, image):
         if self.is_fixed_size:
             assert self.model_image_size[0] % 32 == 0, 'Multiples of 32 required'
             assert self.model_image_size[1] % 32 == 0, 'Multiples of 32 required'
@@ -99,8 +99,8 @@ class YOLO:
         raw_output = self.yolo_model.predict(image_data)
         out_boxes, out_scores, out_classes = self.__parse_raw_out(raw_output, self._get_anchors(),
                                                                   self.num_class, (image.height, image.width),
-                                                                  max_boxes)
-        '''
+                                                                  max_boxes)'''
+
         out_boxes, out_scores, out_classes = self.sess.run(
             [self.boxes, self.scores, self.classes],
             feed_dict={
@@ -108,6 +108,7 @@ class YOLO:
                 self.input_image_shape: [image.size[1], image.size[0]],
                 K.learning_phase(): 0
             })
+
         return_boxs = []
         return_classes = []
         return_scores = []

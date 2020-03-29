@@ -1,9 +1,4 @@
-"""
-Retrain the YOLO model for your own dataset.
-"""
-import os
-import numpy as np
-import cv2 as cv
+from det_train_generator import *
 
 import keras.backend as K
 from keras.layers import Input, Lambda
@@ -11,19 +6,8 @@ from keras.models import Model
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard, ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 
-from tracking.yolo3.model import preprocess_true_boxes, yolo_body, yolo_loss
-from tracking.yolo3.utils import get_random_data
+from tracking.yolo3.model import yolo_body, yolo_loss
 
-cwd = os.getcwd()
-common_dir = os.path.dirname(cwd)
-dataset_dir = os.path.join(common_dir, 'Datasets', 'VisDrone')
-train_data_dir = os.path.join(dataset_dir, 'VisDrone2019-DET-train')
-val_data_dir = os.path.join(dataset_dir, 'VisDrone2019-DET-val')
-train_img_dir = os.path.join(train_data_dir, 'images')
-train_anno_dir = os.path.join(train_data_dir, 'annotations')
-val_img_dir = os.path.join(val_data_dir, 'images')
-val_anno_dir = os.path.join(val_data_dir, 'annotations')
-model_base = os.path.join(cwd, 'tracking/model_data')
 origin_model_path = os.path.join(model_base, 'yolo.h5')
 coarse_model_path = os.path.join(model_base, 'trained_weights_stage_1.h5')
 
@@ -35,7 +19,7 @@ def train(is_coarse_available=False):
     num_classes = len(class_names)
     anchors = get_anchors(anchors_path)
 
-    input_shape = (672, 928)  # multiple of 32, hw
+    input_shape = (672, 992)  # multiple of 32, hw
     if is_coarse_available:
         model_path = coarse_model_path
     else:
@@ -48,8 +32,13 @@ def train(is_coarse_available=False):
                                  monitor='val_loss', save_weights_only=True, save_best_only=False, period=5)
     reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3, verbose=1)
     early_stopping = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=1)
-    num_train = len(os.listdir(train_img_dir))
-    num_val = len(os.listdir(val_img_dir))
+    '''num_train = len(os.listdir(det_train_img_dir))
+    num_val = len(os.listdir(det_val_img_dir))'''
+    # use mot-seqs to train detector
+    train_seq_ids = all_seq_ids('train')
+    val_seq_ids = all_seq_ids('val')
+    num_train = len(train_seq_ids)
+    num_val = len(val_seq_ids)
     # Train with frozen layers first, to get a stable loss.
     # Adjust num epochs to your dataset. This step is enough to obtain a not bad model.
     if not is_coarse_available:
@@ -59,14 +48,15 @@ def train(is_coarse_available=False):
 
         batch_size = 18
         # print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
-        model.fit_generator(train_generator(batch_size, input_shape, anchors, num_classes),
+        model.fit_generator(seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes,
+                                                        file_ids=train_seq_ids),
                             steps_per_epoch=max(1, num_train // batch_size),
-                            validation_data=val_generator(batch_size, input_shape, anchors,
-                                                          num_classes),
+                            validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
+                                                                      num_classes, file_ids=val_seq_ids),
                             validation_steps=max(1, num_val // batch_size),
                             epochs=50,
                             initial_epoch=0,
-                            callbacks=[logging, checkpoint])
+                            callbacks=[logging, checkpoint, early_stopping])
         model.save_weights(os.path.join(model_base ,'trained_weights_stage_1.h5'))
 
     # Unfreeze and continue training, to fine-tune.
@@ -78,12 +68,13 @@ def train(is_coarse_available=False):
 
     batch_size = 2  # note that more GPU memory is required after unfreezing the body
     print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
-    model.fit_generator(train_generator(batch_size, input_shape, anchors, num_classes),
+    model.fit_generator(seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes,
+                                                    file_ids=train_seq_ids),
                         steps_per_epoch=max(1, num_train // batch_size),
-                        validation_data=val_generator(batch_size, input_shape, anchors,
-                                                      num_classes),
+                        validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
+                                                                  num_classes, file_ids=val_seq_ids),
                         validation_steps=max(1, num_val // batch_size),
-                        epochs=100,
+                        epochs=150,
                         initial_epoch=50,
                         callbacks=[logging, checkpoint, reduce_lr, early_stopping])
     model.save_weights(os.path.join(model_base , 'trained_weights_final.h5'))
@@ -137,77 +128,7 @@ def create_model(input_shape, anchors, num_classes, weights_path, load_pretraine
     return model
 
 
-def train_generator(batch_size, input_shape, anchors, num_classes):
-    '''data generator for fit_generator'''
-    fileids = [filename[:-4] for filename in os.listdir(train_img_dir)]
-    n = len(fileids)
-    i = 0
-    while True:
-        image_data = []
-        box_data = []
-        for b in range(batch_size):
-            if i == 0:
-                np.random.shuffle(fileids)
-            image, box = data_augment(train_img_dir, train_anno_dir, fileids[i], input_shape)
-            image_data.append(image)
-            box_data.append(box)
-            i = (i + 1) % n
-        image_data = np.array(image_data)
-        box_data = np.array(box_data)
-        y_true = preprocess_true_boxes(box_data, input_shape, anchors, num_classes)
-        yield [image_data, *y_true], np.zeros(batch_size)
 
-
-def val_generator(batch_size, input_shape, anchors, num_classes):
-    fileids = [filename[:-4] for filename in os.listdir(val_img_dir)]
-    n = len(fileids)
-    i = 0
-    while True:
-        image_data = []
-        box_data = []
-        for b in range(batch_size):
-            if i == 0:
-                np.random.shuffle(fileids)
-            image, box = data_augment(val_img_dir, val_anno_dir, fileids[i], input_shape)
-            image_data.append(image)
-            box_data.append(box)
-            i = (i + 1) % n
-        image_data = np.array(image_data)
-        box_data = np.array(box_data)
-        y_true = preprocess_true_boxes(box_data, input_shape, anchors, num_classes)
-        yield [image_data, *y_true], np.zeros(batch_size)
-
-
-def data_augment(img_dir, anno_dir, fileid, input_shape):
-    img = cv.imread(os.path.join(img_dir, fileid + '.jpg'))
-    img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-    img = np.float32(img)
-    anno_array = parse_anno(anno_dir, fileid)
-    anno_array = np.array(anno_array)
-    image, box = get_random_data(img, anno_array, input_shape, random=True)
-    return image, box
-
-
-def parse_anno(anno_dir, fileid):
-    result = []
-    with open(os.path.join(anno_dir, fileid + '.txt')) as file:
-        line = file.readline()
-        while len(line) > 0:
-            strnums = line.split(',')[:6]
-            line = file.readline()
-            nums = []
-            for str_num in strnums:
-                nums.append(int(str_num))
-            if nums[4] != 1 or nums[5] == 0:
-                continue
-                # chang to min-max box
-            nums[2] += nums[0]
-            nums[3] += nums[1]
-            nums[5] -= 1
-            anno = nums[:4]
-            anno.append(nums[5])
-            result.append(anno)
-    return result
 
 
 if __name__ == '__main__':
