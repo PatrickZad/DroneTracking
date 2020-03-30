@@ -1,5 +1,5 @@
 import os
-#os.environ['CUDA_VISIBLE_DEVICES']='-1'
+# os.environ['CUDA_VISIBLE_DEVICES']='-1'
 import numpy as np
 import cv2 as cv
 from common import *
@@ -66,8 +66,7 @@ nn_budget = None
 nms_max_overlap = 1.0
 
 # deep_sort
-model_base = os.path.join(cwd, 'tracking', 'model_data')
-#yolo_file = os.path.join(model_base, 'trained_weights_stage_1.h5')
+# yolo_file = os.path.join(model_base, 'trained_weights_stage_1.h5')
 yolo_file = os.path.join(model_base, 'trained_weights_final.h5')
 # yolo_file = os.path.join(model_base, 'yolo.h5')
 anchor_file = os.path.join(model_base, 'yolo_anchors.txt')
@@ -89,7 +88,7 @@ for seq_dir in dirs[::-1]:
     frame_index = 0
     for (frame, filename) in frame_reader:
         frame = cv.imread(os.path.join(frames_dir, filename))
-        img = Image.fromarray(frame)
+        img = Image.fromarray(frame[..., ::-1])  # bgr to rgb
         raw_detections, raw_scores, raw_classifications = detector.detect_image(img)
         apperance_features = apperance_model(frame, raw_detections)
         detections = [Detection(bbox, 1.0, feature) for bbox, feature in zip(raw_detections, apperance_features)]
@@ -111,7 +110,7 @@ for seq_dir in dirs[::-1]:
         for det, cla in zip(detections, raw_classifications):
             bbox = det.to_tlbr()
             cv.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (255, 0, 0), 2)
-        #cv.imwrite(os.path.join(expr_dir, filename), frame)
+        # cv.imwrite(os.path.join(expr_dir, filename), frame)
         # cv.imshow('', frame)
         if write_video:
             writer.write(frame)
