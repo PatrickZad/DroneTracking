@@ -19,10 +19,10 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
         b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
 
     # get the corrdinates of the intersection rectangle
-    inter_rect_x1 = np.max(b1_x1, b2_x1)
-    inter_rect_y1 = np.max(b1_y1, b2_y1)
-    inter_rect_x2 = np.min(b1_x2, b2_x2)
-    inter_rect_y2 = np.min(b1_y2, b2_y2)
+    inter_rect_x1 = np.maximum(b1_x1, b2_x1)
+    inter_rect_y1 = np.maximum(b1_y1, b2_y1)
+    inter_rect_x2 = np.minimum(b1_x2, b2_x2)
+    inter_rect_y2 = np.minimum(b1_y2, b2_y2)
     # Intersection area
     inter_area = np.zeros(inter_rect_x1.shape[0])
     raw_inter_width = inter_rect_x2 - inter_rect_x1 + 1
@@ -61,7 +61,7 @@ def get_batch_statistics(outputs, targets, iou_threshold):
     batch_metrics = []
     for sample_i in range(len(outputs)):
 
-        if outputs[sample_i] is None:
+        if len(outputs[sample_i]) == 0:  # is None:
             continue
 
         output = outputs[sample_i]  # output of one sample
@@ -71,7 +71,7 @@ def get_batch_statistics(outputs, targets, iou_threshold):
 
         true_positives = np.zeros(pred_boxes.shape[0])  # number of boxes
 
-        annotations = targets[targets[:, 0] == sample_i][:, 1:]  # ground truth annotation: label,x1,y1,x2,y2
+        annotations = targets[sample_i]  # ground truth annotation: label,x1,y1,x2,y2
         target_labels = annotations[:, 0] if len(annotations) else []
         if len(annotations):
             detected_boxes = []
@@ -86,8 +86,9 @@ def get_batch_statistics(outputs, targets, iou_threshold):
                 # Ignore if label is not one of the target labels
                 if pred_label not in target_labels:
                     continue
-
-                iou, box_index = bbox_iou(pred_box.unsqueeze(0), target_boxes).max(0)
+                iou_array = bbox_iou(np.tile(pred_box, (target_boxes.shape[0], 1)), target_boxes)
+                box_index = np.argmax(iou_array)
+                iou = iou_array[box_index]
                 if iou >= iou_threshold and box_index not in detected_boxes:
                     true_positives[pred_i] = 1
                     detected_boxes += [box_index]
@@ -197,11 +198,18 @@ def detection_eval(raw_detections, raw_scores, raw_classifications, annotations,
     sample_metrics = []
     labels = []
     for i in range(img_nums):
+        detboxes = np.array(raw_detections[i]).reshape((-1, 4))
+        detboxes[:, 2] += detboxes[:, 0]
+        detboxes[:, 3] += detboxes[:, 1]
+        scores = np.array(raw_scores[i]).reshape((-1, 1))
+        classifications = np.array(raw_classifications[i]).reshape((-1, 1))
         labels += annotations[i][:, -1].tolist()
-        targets = np.concatenate([annotations[i][:, -1], annotations[i][:, :-1]], axis=-1)
-        targets.unsqueeze(0)
-        detections = np.concatenate([raw_detections[i], raw_scores[i], raw_classifications[i]])
-        detections.unsqueeze(0)
+        classes = annotations[i][:, -1].reshape((-1, 1))
+        boxes = annotations[i][:, :-1].reshape((-1, 4))
+        targets = np.concatenate([classes, boxes], axis=-1)
+        targets = np.expand_dims(targets, 0)
+        detections = np.concatenate([detboxes, scores, classifications], axis=-1)
+        detections = np.expand_dims(detections, 0)
         # batch_size, each sample :[true_positives(list), pred_scores(list), pred_labels(list)]
         sample_metrics += get_batch_statistics(detections, targets, iou_threshold=iou_thres)
     # three lists: true_positives, pred_scores, pred_labels
