@@ -40,11 +40,11 @@ class DetImageReader:
                 anno_list.append(anno_array)
         # img_array = cv.cvtColor(img_array, cv.COLOR_BGR2RGB)  # rgb image
         # img_array = np.transpose(img_array, [2, 0, 1])
-        return self.__fileids[self.__next], img_array, np.concatenate(anno_list, axis=0)
+        return self.__fileids[self.__next-1], img_array, np.concatenate(anno_list, axis=0)
 
 
 # yolo_file = os.path.join(model_base, 'trained_weights_stage_1.h5')
-yolo_file = os.path.join(model_base, 'trained_weights_final.h5')
+yolo_file = os.path.join(model_base, 'ondet_trained_weights_final.h5')
 # yolo_file = os.path.join(model_base, 'yolo.h5')
 anchor_file = os.path.join(model_base, 'yolo_anchors.txt')
 class_file = os.path.join(model_base, 'visdrone_classes11.txt')

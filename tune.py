@@ -1,5 +1,5 @@
 from det_train_generator import *
-
+#os.environ['CUDA_VISIBLE_DEVICES']='-1'
 import keras.backend as K
 from keras.layers import Input, Lambda
 from keras.models import Model
@@ -42,10 +42,10 @@ def train(is_coarse_available=False):
     '''num_train = len(os.listdir(det_train_img_dir))
     num_val = len(os.listdir(det_val_img_dir))'''
     # use mot-seqs to train detector
-    train_seq_ids = all_seq_ids('train')
-    val_seq_ids = all_seq_ids('val')
-    num_train = len(train_seq_ids)
-    num_val = len(val_seq_ids)
+    train_seq_ref = all_seq_data_for_det()
+    val_seq_ref = all_seq_data_for_det('val')
+    num_train = len(train_seq_ref[0])
+    num_val = len(val_seq_ref[0])
     # Train with frozen layers first, to get a stable loss.
     # Adjust num epochs to your dataset. This step is enough to obtain a not bad model.
     if not is_coarse_available:
@@ -53,13 +53,13 @@ def train(is_coarse_available=False):
             # use custom yolo_loss Lambda layer.
             'yolo_loss': lambda y_true, y_pred: y_pred})
 
-        batch_size = 18
+        batch_size = 20
         # print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
         model_train.fit_generator(seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes,
-                                                        fileids=train_seq_ids),
+                                                        train_seq_ref),
                             steps_per_epoch=max(1, num_train // batch_size),
                             validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
-                                                                      num_classes, fileids=val_seq_ids),
+                                                                      num_classes, val_seq_ref),
                             validation_steps=max(1, num_val // batch_size),
                             epochs=50,
                             initial_epoch=0,
@@ -73,13 +73,13 @@ def train(is_coarse_available=False):
                   loss={'yolo_loss': lambda y_true, y_pred: y_pred})  # recompile to apply the change
     print('Unfreeze all of the layers.')
 
-    batch_size = 2  # note that more GPU memory is required after unfreezing the body
+    batch_size = 4  # note that more GPU memory is required after unfreezing the body
     print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
     model_train.fit_generator(seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes,
-                                                    fileids=train_seq_ids),
+                                                    train_seq_ref),
                         steps_per_epoch=max(1, num_train // batch_size),
                         validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
-                                                                  num_classes, fileids=val_seq_ids),
+                                                                  num_classes, val_seq_ref),
                         validation_steps=max(1, num_val // batch_size),
                         epochs=150,
                         initial_epoch=50,
