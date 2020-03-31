@@ -1,0 +1,6 @@
+pedestrian
+car
+van
+truck
+bus
+others

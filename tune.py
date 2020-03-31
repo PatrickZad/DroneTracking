@@ -11,15 +11,20 @@ from tracking.yolo3.model import yolo_body, yolo_loss
 
 origin_model_path = os.path.join(model_base, 'yolo.h5')
 coarse_model_path = os.path.join(model_base, 'trained_weights_stage_1.h5')
+
+
 class MultigpuTrainSaver(Callback):
-    def __init__(self,model):
-        self.model_to_save=model
+    def __init__(self, model):
+        self.model_to_save = model
+
     def on_epoch_end(self, epoch, logs=None):
-        if epoch>0 and epoch%10==0:
+        if epoch > 0 and epoch % 10 == 0:
             self.model_to_save.save(os.path.join(model_base, 'ep%{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5')
-                                    %(epoch,logs['loss'],logs['val_loss']))
+                                    % (epoch, logs['loss'], logs['val_loss']))
+
+
 def train(is_coarse_available=False):
-    classes_path = os.path.join(model_base, 'visdrone_classes.txt')
+    classes_path = os.path.join(model_base, 'visdrone_classes6.txt')
     anchors_path = os.path.join(model_base, 'yolo_anchors.txt')
     class_names = get_classes(classes_path)
     num_classes = len(class_names)
@@ -31,12 +36,12 @@ def train(is_coarse_available=False):
     else:
         model_path = origin_model_path
     model_train = create_model(input_shape, anchors, num_classes,
-                         freeze_body=2, weights_path=model_path)  # make sure you know what you freeze
-    #model_train=multi_gpu_model(model_origin,gpus=2)
+                               freeze_body=2, weights_path=model_path)  # make sure you know what you freeze
+    # model_train=multi_gpu_model(model_origin,gpus=2)
     logging = TensorBoard(log_dir=model_base)
     checkpoint = ModelCheckpoint(os.path.join(model_base, 'ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5'),
                                  monitor='val_loss', save_weights_only=True, save_best_only=False, period=5)
-    #checkpoint=MultigpuTrainSaver(model_origin)
+    # checkpoint=MultigpuTrainSaver(model_origin)
     reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3, verbose=1)
     early_stopping = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=1)
     '''num_train = len(os.listdir(det_train_img_dir))
@@ -56,35 +61,37 @@ def train(is_coarse_available=False):
         batch_size = 18
         # print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
         model_train.fit_generator(seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes,
-                                                        fileids=train_seq_ids),
-                            steps_per_epoch=max(1, num_train // batch_size),
-                            validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
-                                                                      num_classes, fileids=val_seq_ids),
-                            validation_steps=max(1, num_val // batch_size),
-                            epochs=50,
-                            initial_epoch=0,
-                            callbacks=[logging, checkpoint, early_stopping])
-        model_train.save_weights(os.path.join(model_base ,'trained_weights_stage_1.h5'))
+                                                              fileids=train_seq_ids, refined_class=True),
+                                  steps_per_epoch=max(1, num_train // batch_size),
+                                  validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
+                                                                            num_classes, fileids=val_seq_ids,
+                                                                            refined_class=True),
+                                  validation_steps=max(1, num_val // batch_size),
+                                  epochs=50,
+                                  initial_epoch=0,
+                                  callbacks=[logging, checkpoint, early_stopping])
+        model_train.save_weights(os.path.join(model_base, 'trained_weights_stage_1.h5'))
 
     # Unfreeze and continue training, to fine-tune.
     for i in range(len(model_train.layers)):
         model_train.layers[i].trainable = True
     model_train.compile(optimizer=Adam(lr=1e-6),
-                  loss={'yolo_loss': lambda y_true, y_pred: y_pred})  # recompile to apply the change
+                        loss={'yolo_loss': lambda y_true, y_pred: y_pred})  # recompile to apply the change
     print('Unfreeze all of the layers.')
 
     batch_size = 2  # note that more GPU memory is required after unfreezing the body
     print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
     model_train.fit_generator(seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes,
-                                                    fileids=train_seq_ids),
-                        steps_per_epoch=max(1, num_train // batch_size),
-                        validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
-                                                                  num_classes, fileids=val_seq_ids),
-                        validation_steps=max(1, num_val // batch_size),
-                        epochs=150,
-                        initial_epoch=50,
-                        callbacks=[logging, checkpoint, reduce_lr, early_stopping])
-    model_train.save_weights(os.path.join(model_base , 'trained_weights_final.h5'))
+                                                          fileids=train_seq_ids, refined_class=True),
+                              steps_per_epoch=max(1, num_train // batch_size),
+                              validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
+                                                                        num_classes, fileids=val_seq_ids,
+                                                                        refined_class=True),
+                              validation_steps=max(1, num_val // batch_size),
+                              epochs=150,
+                              initial_epoch=50,
+                              callbacks=[logging, checkpoint, reduce_lr, early_stopping])
+    model_train.save_weights(os.path.join(model_base, 'trained_weights_final.h5'))
 
     # Further training if needed.
 
@@ -133,9 +140,6 @@ def create_model(input_shape, anchors, num_classes, weights_path, load_pretraine
     model = Model([model_body.input, *y_true], model_loss)
 
     return model
-
-
-
 
 
 if __name__ == '__main__':

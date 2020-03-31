@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 from common import *
 from collections import defaultdict
-# from multiprocessing import Pool, Manager, cpu_count
+import multiprocessing
 
 from tracking.yolo3.model import preprocess_true_boxes
 from tracking.yolo3.utils import get_random_data
@@ -59,7 +59,7 @@ def det_data_augment(img_dir, anno_dir, fileid, input_shape):
     return image, box
 
 
-def seq_data_augment_for_det(fileid, input_shape, seq_annos, phase='train'):
+def seq_data_augment_for_det(fileid, input_shape, seq_annos, phase='train', refined_class=False):
     assert phase == 'train' or phase == 'val'
     if phase == 'train':
         seq_base = mot_train_seq_dir
@@ -71,7 +71,7 @@ def seq_data_augment_for_det(fileid, input_shape, seq_annos, phase='train'):
     img = cv.imread(os.path.join(seq_base, fileid[0], img_name + '.jpg'))
     img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
     img = np.float32(img)
-    anno_array = parse_seq_anno_for_det(seq_annos, fileid)
+    anno_array = parse_seq_anno_for_det(seq_annos, fileid, refined_class)
     image, box = get_random_data(img, anno_array, input_shape, random=True, max_boxes=128)
     return image, box
 
@@ -98,12 +98,26 @@ def parse_det_anno(anno_dir, fileid):
     return result
 
 
-def parse_seq_anno_for_det(anno_dict, file_id):
+def parse_seq_anno_for_det(anno_dict, file_id, refined_class):
     annos = anno_dict[file_id[0]][file_id[1]]
     anno_array = np.concatenate(annos, axis=0)
     anno_array[:, 2] += anno_array[:, 0]
     anno_array[:, 3] += anno_array[:, 1]
-    # anno_array[:, 4] -= 1
+    if refined_class:
+        # remove ignore regions
+        mask = anno_array[:, 4] != 0
+        anno_array = anno_array[mask]
+        # merge people and pedestrian
+        anno_array[:, 4][anno_array[:, 4] <= 2] = 0
+        # id3 to be 11 to make sure no wrong change
+        anno_array[:, 4][anno_array[:, 4] == 3] = 11
+        # car,van,truck,bus
+        anno_array[:, 4][anno_array[:, 4] == 4] = 1
+        anno_array[:, 4][anno_array[:, 4] == 5] = 2
+        anno_array[:, 4][anno_array[:, 4] == 6] = 3
+        anno_array[:, 4][anno_array[:, 4] == 9] = 4
+        # others
+        anno_array[:, 4][anno_array[:, 4] > 4] = 5
     return anno_array
 
 
@@ -169,7 +183,7 @@ def all_seq_annos(phase='train'):
     return anno_dict
 
 
-def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, fileids=None):
+def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, fileids=None, refined_class=False):
     if fileids is None:
         fileids = all_seq_ids()
     n = len(fileids)
@@ -181,7 +195,7 @@ def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, f
         for b in range(batch_size):
             if i == 0:
                 np.random.shuffle(fileids)
-            image, box = seq_data_augment_for_det(fileids[i], input_shape, seq_annos)
+            image, box = seq_data_augment_for_det(fileids[i], input_shape, seq_annos, refined_class)
             image_data.append(image)
             box_data.append(box)
             i = (i + 1) % n
@@ -191,7 +205,7 @@ def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, f
         yield [image_data, *y_true], np.zeros(batch_size)
 
 
-def seq_val_for_det_generator(batch_size, input_shape, anchors, num_classes, fileids=None):
+def seq_val_for_det_generator(batch_size, input_shape, anchors, num_classes, fileids=None, refined_class=False):
     if fileids is None:
         fileids = all_seq_ids('val')
     n = len(fileids)
@@ -203,7 +217,7 @@ def seq_val_for_det_generator(batch_size, input_shape, anchors, num_classes, fil
         for b in range(batch_size):
             if i == 0:
                 np.random.shuffle(fileids)
-            image, box = seq_data_augment_for_det(fileids[i], input_shape, seq_annos=seq_annos, phase='val')
+            image, box = seq_data_augment_for_det(fileids[i], input_shape, seq_annos, 'val', refined_class)
             image_data.append(image)
             box_data.append(box)
             i = (i + 1) % n
@@ -266,8 +280,45 @@ def iou4array(boxes, cluster_centers, k):
     return result
 
 
+def det_statistics():
+    count_array = np.zeros(12)
+    for anno_file in os.listdir(det_train_anno_dir):
+        with open(os.path.join(det_train_anno_dir, anno_file), 'r') as file:
+            lines = file.readlines()
+            for line in lines:
+                class_num = int(line.split(',')[5])
+                count_array[class_num] += 1
+    return count_array
+
+
+def count_task(count_array, count_file):
+    with open(os.path.join(mot_train_anno_dir, count_file), 'r') as file:
+        line = file.readline()
+        while len(line) > 0:
+            class_num = int(line.split(',')[7])
+            count_array[class_num] += 1
+            line = file.readline()
+
+
+def seq_statistics():
+    '''count_array = multiprocessing.Manager().list([0] * 12)
+    p_pool = multiprocessing.Pool(4)
+    for filename in os.listdir(mot_train_anno_dir):
+        p_pool.apply_async(count_task, args=(count_array, filename))
+    p_pool.close()
+    p_pool.join()'''
+    count_array = np.zeros(12)
+    for filename in os.listdir(mot_train_anno_dir):
+        count_task(count_array, filename)
+    return count_array
+
+
 if __name__ == '__main__':
-    boxes_dict = all_seq_annos()
+    count = det_statistics()
+    print(count)
+    count = seq_statistics()
+    print(count)
+    '''boxes_dict = all_seq_annos()
     all_boxes = []
     for vid, frame_boxes_dict in boxes_dict.items():
         for id, boxes in frame_boxes_dict.items():
@@ -275,4 +326,4 @@ if __name__ == '__main__':
             all_boxes.append(array[:, :-1])
     anno_array = np.concatenate(all_boxes, axis=0)
     clusters = cluster_anchors(anno_array, 9)
-    print(clusters)
+    print(clusters)'''
