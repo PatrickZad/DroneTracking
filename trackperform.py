@@ -67,7 +67,7 @@ nms_max_overlap = 1.0
 
 # deep_sort
 # yolo_file = os.path.join(model_base, 'trained_weights_stage_1.h5')
-yolo_file = os.path.join(model_base, 'trained_weights_final.h5')
+yolo_file = os.path.join(model_base, 'onseq_trained_weights_final.h5')
 # yolo_file = os.path.join(model_base, 'yolo.h5')
 anchor_file = os.path.join(model_base, 'yolo_anchors.txt')
 class_file = os.path.join(model_base, 'visdrone_classes.txt')

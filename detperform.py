@@ -1,7 +1,9 @@
 import numpy as np
 import cv2 as cv
+
 from common import *
 from PIL import Image
+os.environ['CUDA_VISIBLE_DEVICES']='-1'
 from tracking.yolo import YOLO
 from evaluate import detection_eval
 
@@ -11,10 +13,9 @@ class DetImageReader:
         self.__model = model
         self.__img_dir = os.path.join(base_dir, 'images')
         self.__anno_dir = os.path.join(base_dir, 'annotations')
-        self.__fileids = [filename[:-4] for filename in os.listdir(self.__img_dir)][:2]
+        self.__fileids = [filename[:-4] for filename in os.listdir(self.__img_dir)]
         self.__next = 0
-        # self.__length = len(self.__fileids)
-        self.__length = 2
+        self.__length = len(self.__fileids)
 
     def __iter__(self):
         return self
@@ -52,6 +53,7 @@ class DetImageReader:
 yolo_file = os.path.join(model_base, 'ondet_trained_weights_final.h5')
 # yolo_file = os.path.join(model_base, 'yolo.h5')
 anchor_file = os.path.join(model_base, 'yolo_anchors.txt')
+'''
 class_file = os.path.join(model_base, 'visdrone_classes11.txt')
 detector = YOLO(yolo_file, anchor_file, class_file, is_weights=True)
 imgreader = DetImageReader(det_val_data_dir)
@@ -80,8 +82,9 @@ for file_id, img_array, annotation in imgreader:
     val_classes.append(raw_classifications)
     val_annos.append(annotation)
 evaluation_det = detection_eval(val_bboxes, val_scores, val_classes, val_annos, 0.5)
-
+print(evaluation_det)
 # eval seq trained model
+'''
 yolo_file = os.path.join(model_base, 'onseq_trained_weights_final.h5')
 class_file = os.path.join(model_base, 'visdrone_classes.txt')
 detector = YOLO(yolo_file, anchor_file, class_file, is_weights=True)
@@ -96,12 +99,12 @@ for file_id, img_array, annotation in imgreader:
     raw_detections, raw_scores, raw_classifications = detector.detect_image(img)
     for anno in annotation:
         cv.rectangle(img_array, (anno[0], anno[1]), (anno[2], anno[3]), (255, 255, 255), 2)
-        cv.putText(img_array, str(anno[4] + 1), (anno[2], anno[1]), 0, 5e-3 * 200, (0, 0, 255))  # unify class_id
+        cv.putText(img_array, str(anno[4]), (anno[2], anno[1]), 0, 5e-3 * 200, (0, 0, 255))  # unify class_id
     for i in range(len(raw_detections)):
         minmax_bbox = (raw_detections[i][0], raw_detections[i][1], raw_detections[i][0] + raw_detections[i][2],
                        raw_detections[i][1] + raw_detections[i][3])
         cv.rectangle(img_array, (minmax_bbox[0], minmax_bbox[1]), (minmax_bbox[2], minmax_bbox[3]), (255, 0, 0), 2)
-        cv.putText(img_array, str(raw_classifications[i] + 1), (minmax_bbox[0], minmax_bbox[1]), 0, 5e-3 * 200,
+        cv.putText(img_array, str(raw_classifications[i] ), (minmax_bbox[0], minmax_bbox[1]), 0, 5e-3 * 200,
                    (0, 255, 0))  # unify class_id
 
     cv.imwrite(os.path.join(expr_base, file_id + '.jpg'), img_array)
@@ -111,5 +114,7 @@ for file_id, img_array, annotation in imgreader:
     val_classes.append(raw_classifications)
     val_annos.append(annotation)
 evaluation_seq = detection_eval(val_bboxes, val_scores, val_classes, val_annos, 0.5)
-print(evaluation_det)
+
+
 print(evaluation_seq)
+''''''
