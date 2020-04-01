@@ -99,12 +99,12 @@ def det_perform(model_type='onseq'):
             annotation_draw = annotation[annotation[:, 4] != 5]
         for anno in annotation_draw:
             cv.rectangle(img_array, (anno[0], anno[1]), (anno[2], anno[3]), (255, 255, 255), 2)
-            cv.putText(img_array, str(anno[4] + 1), (anno[2], anno[1]), 0, 5e-3 * 200, (0, 0, 255))  # unify class_id
+            cv.putText(img_array, str(anno[4]), (anno[2], anno[1]), 0, 5e-3 * 200, (0, 0, 255))  # unify class_id
         for i in range(len(raw_detections)):
             minmax_bbox = (raw_detections[i][0], raw_detections[i][1], raw_detections[i][0] + raw_detections[i][2],
                            raw_detections[i][1] + raw_detections[i][3])
             cv.rectangle(img_array, (minmax_bbox[0], minmax_bbox[1]), (minmax_bbox[2], minmax_bbox[3]), (255, 0, 0), 2)
-            cv.putText(img_array, str(raw_classifications[i] + 1), (minmax_bbox[0], minmax_bbox[1]), 0, 5e-3 * 200,
+            cv.putText(img_array, str(raw_classifications[i]), (minmax_bbox[0], minmax_bbox[1]), 0, 5e-3 * 200,
                        (0, 255, 0))  # unify class_id
 
         cv.imwrite(os.path.join(expr_base, file_id + '.jpg'), img_array)
