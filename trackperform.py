@@ -139,4 +139,4 @@ def track_perform(model_type='onseq', write_video=True):
 
 
 if __name__ == '__main__':
-    track_perform()
+    track_perform('refine')

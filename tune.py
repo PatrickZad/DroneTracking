@@ -61,7 +61,7 @@ def train(is_coarse_available=False):
         batch_size = 20
         # print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
         model_train.fit_generator(seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes,
-                                                        fileids=train_seq_ref, refined_class=True),
+                                                        train_seq_ref, refined_class=True),
                             steps_per_epoch=max(1, num_train // batch_size),
                             validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
                                                                       num_classes, val_seq_ref,refined_class=True),
@@ -69,7 +69,7 @@ def train(is_coarse_available=False):
                             epochs=50,
                             initial_epoch=0,
                             callbacks=[logging, checkpoint, early_stopping])
-        model_train.save_weights(os.path.join(model_base ,'trained_weights_stage_1.h5'))
+        model_train.save_weights(os.path.join(model_base ,'refine_trained_weights_stage_1.h5'))
 
     # Unfreeze and continue training, to fine-tune.
     for i in range(len(model_train.layers)):
@@ -81,7 +81,7 @@ def train(is_coarse_available=False):
     batch_size = 4  # note that more GPU memory is required after unfreezing the body
     print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
     model_train.fit_generator(seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes,
-                                                    fileids=train_seq_ref, refined_class=True),
+                                                    train_seq_ref, refined_class=True),
                         steps_per_epoch=max(1, num_train // batch_size),
                         validation_data=seq_val_for_det_generator(batch_size, input_shape, anchors,
                                                                   num_classes, val_seq_ref,refined_class=True),
@@ -89,7 +89,7 @@ def train(is_coarse_available=False):
                         epochs=150,
                         initial_epoch=50,
                         callbacks=[logging, checkpoint, reduce_lr, early_stopping])
-    model_train.save_weights(os.path.join(model_base , 'trained_weights_final.h5'))
+    model_train.save_weights(os.path.join(model_base , 'refine_trained_weights_final.h5'))
 
     # Further training if needed.
 

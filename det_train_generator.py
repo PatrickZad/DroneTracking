@@ -224,7 +224,7 @@ def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, f
         for b in range(batch_size):
             if i == 0:
                 np.random.shuffle(fileids)
-            image, box = seq_data_augment_for_det(fileids[i], input_shape, seq_annos, refined_class)
+            image, box = seq_data_augment_for_det(fileids[i], input_shape, seq_annos, refined_class=refined_class)
             image_data.append(image)
             box_data.append(box)
             i = (i + 1) % n
