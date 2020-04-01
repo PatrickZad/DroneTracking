@@ -1,7 +1,10 @@
 import numpy as np
 import cv2 as cv
+
 from common import *
 from PIL import Image
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 from tracking.yolo import YOLO
 from evaluate import detection_eval
 
@@ -12,10 +15,9 @@ class DetImageReader:
         self.__model = model
         self.__img_dir = os.path.join(base_dir, 'images')
         self.__anno_dir = os.path.join(base_dir, 'annotations')
-        self.__fileids = [filename[:-4] for filename in os.listdir(self.__img_dir)][:2]
+        self.__fileids = [filename[:-4] for filename in os.listdir(self.__img_dir)]
         self.__next = 0
-        # self.__length = len(self.__fileids)
-        self.__length = 2
+        self.__length = len(self.__fileids)
 
     def __iter__(self):
         return self

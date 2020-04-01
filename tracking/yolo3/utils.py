@@ -45,7 +45,7 @@ def get_random_data(img, annoarray, input_shape, random=True, max_boxes=20, jitt
     scale_factor = min(h / ih, w / iw)
     image = cv.resize(img, dsize=(int(iw * scale_factor), int(ih * scale_factor)))
     h_offset = (h - image.shape[0]) // 2
-    w_offset = (w - image.shaoe[1]) // 2
+    w_offset = (w - image.shape[1]) // 2
     height_limit = h_offset + image.shape[0]
     width_limit = w_offset + image.shape[1]
     image = cv.copyMakeBorder(image, top=h_offset, bottom=input_shape[0] - height_limit,

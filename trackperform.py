@@ -86,6 +86,7 @@ def track_perform(model_type='onseq', write_video=True):
         tracker = Tracker(apperance_metric)
         frames_dir = os.path.join(val_sequences_dir, seq_dir)
         frame_reader = SequenceReader(frames_dir)
+
         if write_video:
             fourcc = cv.VideoWriter_fourcc(*'MJPG')
             writer = cv.VideoWriter(os.path.join(expr_dir, seq_dir + 'tracking.avi'), fourcc, 15,

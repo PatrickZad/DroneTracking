@@ -120,6 +120,33 @@ def parse_seq_anno_for_det(anno_dict, file_id, refined_class):
         anno_array[:, 4][anno_array[:, 4] > 4] = 5
     return anno_array
 
+def all_seq_data_for_det(phase='train'):
+    assert phase == 'train' or phase == 'val'
+    if phase == 'train':
+        seq_dir = mot_train_seq_dir
+        anno_dir = mot_train_anno_dir
+    else:
+        anno_dir = mot_val_anno_dir
+        seq_dir = mot_val_seq_dir
+    videoids = [filename[:-4] for filename in os.listdir(anno_dir)]
+    anno_dict = {}
+    seq_ids=[]
+    for vid in videoids:
+        vanno_dict = {}
+        with open(os.path.join(anno_dir, vid + '.txt'), 'r') as anno_file:
+            lines = anno_file.readlines()
+            for line in lines:
+                nums = line.split(',')
+                id_num = int(nums[0])
+                anno_num = np.int32([nums[2], nums[3], nums[4], nums[5], nums[7]])
+                if id_num in vanno_dict.keys():
+                    vanno_dict[id_num].append(anno_num.reshape((1, 5)))
+                else:
+                    seq_ids.append((vid,id_num))
+                    vanno_dict[id_num]=[anno_num.reshape((1, 5))]
+        anno_dict[vid] = vanno_dict
+    return seq_ids,anno_dict
+
 
 def all_seq_ids(phase='train'):
     assert phase == 'train' or phase == 'val'
@@ -183,12 +210,14 @@ def all_seq_annos(phase='train'):
     return anno_dict
 
 
-def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, fileids=None, refined_class=False):
-    if fileids is None:
-        fileids = all_seq_ids()
+
+def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, file_ref=None,refined_class=False):
+    if file_ref is None:
+        fileids,seq_annos = all_seq_data_for_det()
+    else:
+        fileids, seq_annos=file_ref[0],file_ref[1]
     n = len(fileids)
     i = 0
-    seq_annos = all_seq_annos()
     while True:
         image_data = []
         box_data = []
@@ -205,12 +234,13 @@ def seq_train_for_det_generator(batch_size, input_shape, anchors, num_classes, f
         yield [image_data, *y_true], np.zeros(batch_size)
 
 
-def seq_val_for_det_generator(batch_size, input_shape, anchors, num_classes, fileids=None, refined_class=False):
-    if fileids is None:
-        fileids = all_seq_ids('val')
+def seq_val_for_det_generator(batch_size, input_shape, anchors, num_classes, file_ref=None,refined_class=False):
+    if file_ref is None:
+        fileids,seq_annos = all_seq_data_for_det('val')
+    else:
+        fileids, seq_annos=file_ref[0],file_ref[1]
     n = len(fileids)
     i = 0
-    seq_annos = all_seq_annos('val')
     while True:
         image_data = []
         box_data = []
