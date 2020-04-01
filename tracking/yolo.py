@@ -24,7 +24,7 @@ class YOLO:
         self.model_path = model_path
         self.anchors_path = anchor_path
         self.classes_path = classes_path
-        self.score = 0.4
+        self.score = 0.5
         self.iou = 0.5
         self.class_names = self._get_class()
         self.anchors = self._get_anchors()
@@ -78,7 +78,7 @@ class YOLO:
         self.input_image_shape = K.placeholder(shape=(2,))
         boxes, scores, classes = yolo_eval(self.yolo_model.output, self.anchors,
                                            len(self.class_names), self.input_image_shape,
-                                           score_threshold=self.score, iou_threshold=self.iou,max_boxes=128)
+                                           score_threshold=self.score, iou_threshold=self.iou, max_boxes=128)
         return boxes, scores, classes
 
     def detect_image(self, image):
@@ -204,9 +204,9 @@ class YOLO:
         grid_x = np.tile(np.arange(0, stop=grid_shape[1]).reshape([1, -1, 1, 1]), [grid_shape[0], 1, 1, 1])
         grid = np.concatenate([grid_x, grid_y], axis=-1)
         grid = np.float32(grid)
-        #print(output)
+        # print(output)
         ordered_output = output.reshape([-1, grid_shape[0], grid_shape[1], num_achors, num_classes + 5])
-        #print(ordered_output)
+        # print(ordered_output)
         box_xy = 1 / (1 + np.exp(-ordered_output[..., :2]))
         box_wh = np.exp(ordered_output[..., 2:4])
         box_confidence = 1 / (1 + np.exp(ordered_output[..., 4:5]))
