@@ -1,5 +1,5 @@
 import os
-# os.environ['CUDA_VISIBLE_DEVICES']='-1'
+#os.environ['CUDA_VISIBLE_DEVICES']='-1'
 import numpy as np
 import cv2 as cv
 from common import *
@@ -108,7 +108,7 @@ def track_perform(model_type='onseq', write_video=True):
             else:
                 class_mask = class_array != 5
             valid_dets, scores, classes = det_array[class_mask], score_array[class_mask], class_array[class_mask]
-            apperance_features = apperance_model(frame, detections)
+            apperance_features = apperance_model(frame, valid_dets)
             detections = [Detection(bbox, 1.0, feature) for bbox, feature in zip(valid_dets, apperance_features)]
             # Run non-maxima suppression.
             boxes = np.array([d.tlwh for d in detections])
