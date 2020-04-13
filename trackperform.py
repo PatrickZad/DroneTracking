@@ -33,16 +33,16 @@ class SeqPerformEvaluator:
         with open(anno_file, 'r') as file:
             lines = file.readlines()
             for line in lines:
-                nums = np.array(line[:-1].split(','))
+                nums = np.int32(line[:-1].split(','))
                 if nums[7] in refined_valid_categories:
                     target_id = nums[1]
                     frame_id = nums[0]
                     if frame_id not in self.__targets_on_frame.keys():
                         self.__targets_on_frame[frame_id] = []
                     if target_id in self.__targets_on_id.keys():
-                        target = self.__targets_on_id[target]
+                        target = self.__targets_on_id[target_id]
                     else:
-                        target = DT_Target(target)
+                        target = DT_Target(target_id)
                         self.__targets_on_id[target_id] = target
                     self.__targets_on_frame[frame_id].append(target)
                     target.add_info(frame_id, nums[2:6], nums[7], nums[8], nums[9])
@@ -55,24 +55,30 @@ class SeqPerformEvaluator:
         return self.__targets_on_frame[frame_id]
 
     def update_det(self, frame_id, detections):
-        taregts_in_frame = self.get_frame_targets(frame_id)
-        target_boxes = np.array([target.get_info()['bbox'] for target in taregts_in_frame])
-        for bbox in detections:
-            box_array = np.array(bbox)
-            box_array[:, 2:] += box_array[:, :2]  # to min-max
-            ious = bbox_iou(box_array, target_boxes)
-            target_index = np.argmax(ious)
-            taregts_in_frame[target_index].add_det_mark(frame_id, True)
-        for target in taregts_in_frame:
-            target.set_det_default()
+        targets_in_frame = self.get_frame_targets(frame_id)
+        target_boxes = np.array([target.get_info(frame_id)['bbox'] for target in targets_in_frame])
+        det_boxes=detections.copy()
+        det_boxes[:,2:] += det_boxes[:,:2]# to min-max
+        for i in range(target_boxes.shape[0]):
+            bbox=target_boxes[i]
+            ious = bbox_iou(np.expand_dims(bbox,axis=0), det_boxes)
+            if ious.max()>0.5:
+                targets_in_frame[i].add_det_mark(frame_id, True)
+            else:
+                targets_in_frame[i].add_det_mark(frame_id,False)
 
     def update_mot(self, frame_id, track):
         taregts_in_frame = self.get_frame_targets(frame_id)
-        target_boxes = np.array([target.get_info()['bbox'] for target in taregts_in_frame])
+        target_boxes = np.array([target.get_info(frame_id)['bbox'] for target in taregts_in_frame])
         track_box = track.to_tlbr()
-        ious = bbox_iou(track_box, target_boxes)
+        ious = bbox_iou(np.expand_dims(track_box,axis=0), target_boxes)
         target_index = np.argmax(ious)
-        taregts_in_frame[target_index].add_track_id(frame_id, track.track_id)
+        if ious[target_index]>0.5:
+            taregts_in_frame[target_index].add_track_id(frame_id, track.track_id)
+    def mot_set_default(self,frame_id):
+        for target in self.get_frame_targets(frame_id):
+            if frame_id not in target.track_ids.keys():
+                target.track_ids[frame_id]=-1
 
     def eval(self):
         # det eval,all targets, dynamic targets, static targets
@@ -80,6 +86,7 @@ class SeqPerformEvaluator:
         detected_targets_num = 0
         all_static_nums = 0
         detected_static_nums = 0
+
         for frame_id, targets in self.__targets_on_frame.items():
             all_targets_num += len(targets)
             for target in targets:
@@ -104,20 +111,23 @@ class SeqPerformEvaluator:
         asso_dynamic_correct_nums = 0
         asso_occlusion_correct_nums = 0
         frame_ids = self.__targets_on_frame.keys()
-        for frame_index in range(len(frame_ids) - 1):
+        frame_ids=list(frame_ids)
+        for frame_index in range(1,len(frame_ids) - 1):
             next_frame_id = frame_ids[frame_index + 1]
             current_frame_id = frame_ids[frame_index]
             next_frame_targets = self.__targets_on_frame[next_frame_id]
-            asso_target_nums += len(next_frame_targets)
             for target in next_frame_targets:
-                correct_asso = current_frame_id in target.track_ids.keys() and target.track_ids[current_frame_id] == \
-                               target.track_ids[next_frame_id]
+                if target not in self.__targets_on_frame[current_frame_id]:
+                    continue
+                asso_target_nums+=1
+                correct_asso = target.track_ids[current_frame_id] == target.track_ids[next_frame_id] \
+                               and target.track_ids[next_frame_id]!=-1
                 if correct_asso: asso_correct_nums += 1
                 if target.eval_mot_type[next_frame_id] == mot_eval_types[0]:
                     asso_dynamic_target_nums += 1
                     if correct_asso: asso_dynamic_correct_nums += 1
                 else:
-                    asso_static_target_nums == 1
+                    asso_static_target_nums += 1
                     if correct_asso: asso_static_correct_nums += 1
                     if target.eval_mot_type[next_frame_id] == mot_eval_types[1]:
                         asso_occlusion_target_nums += 1
@@ -184,7 +194,7 @@ class SequenceReader:
         return self
 
     def __next__(self):
-        if self.__next == self.__length:
+        if self.__next > self.__length:
             raise StopIteration
         filename = self.__filename(self.__next)
         filepath = os.path.join(self.__dir, filename)
@@ -239,10 +249,12 @@ def track_perform(model_type='onseq', write_video=True):
         anno_file_path = os.path.join(mot_val_anno_dir, seq_dir + '.txt')
 
         evaluator = SeqPerformEvaluator(anno_file_path)
-
+        save_dir=os.path.join(expr_dir,seq_dir)
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
         if write_video:
             fourcc = cv.VideoWriter_fourcc(*'MJPG')
-            writer = cv.VideoWriter(os.path.join(expr_dir, seq_dir + 'tracking.avi'), fourcc, 15,
+            writer = cv.VideoWriter(os.path.join(save_dir, seq_dir + 'tracking.avi'), fourcc, 15,
                                     frame_reader.frame_size())
 
         frame_index = 0
@@ -250,9 +262,6 @@ def track_perform(model_type='onseq', write_video=True):
             frame = cv.imread(os.path.join(frames_dir, filename))
             img = Image.fromarray(frame[..., ::-1])  # bgr to rgb
             raw_detections, raw_scores, raw_classifications = detector.detect_image(img)
-
-            evaluator.update_det(frame_id, raw_detections)
-
             class_array = np.array(raw_classifications)
             det_array, score_array, class_array = np.array(raw_detections), np.array(raw_scores), np.array(
                 raw_classifications)
@@ -264,6 +273,9 @@ def track_perform(model_type='onseq', write_video=True):
             else:
                 class_mask = class_array != 5
             valid_dets, scores, classes = det_array[class_mask], score_array[class_mask], class_array[class_mask]
+
+            evaluator.update_det(frame_id, valid_dets)
+
             apperance_features = apperance_model(frame, valid_dets)
             detections = [Detection(bbox, 1.0, feature) for bbox, feature in zip(valid_dets, apperance_features)]
             # Run non-maxima suppression.
@@ -274,6 +286,9 @@ def track_perform(model_type='onseq', write_video=True):
             # track
             tracker.predict()
             tracker.update(detections)
+            for target in evaluator.get_frame_targets(frame_id):
+                bbox=target.get_info(frame_id)['bbox']
+                cv.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0, 255, 0), 2)
             for track in tracker.tracks:
                 if not track.is_confirmed() or track.time_since_update > 1:
                     continue
@@ -283,16 +298,20 @@ def track_perform(model_type='onseq', write_video=True):
                 bbox = track.to_tlbr()
                 cv.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (255, 255, 255), 2)
                 cv.putText(frame, str(track.track_id), (int(bbox[0]), int(bbox[1])), 0, 5e-3 * 200, (0, 255, 0), 2)
-
+            evaluator.mot_set_default(frame_id)
             for det, cla in zip(detections, raw_classifications):
                 bbox = det.to_tlbr()
                 cv.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (255, 0, 0), 2)
-            # cv.imwrite(os.path.join(expr_dir, filename), frame)
+            #cv.imwrite(os.path.join(expr_dir, filename), frame)
             # cv.imshow('', frame)
             if write_video:
                 writer.write(frame)
             frame_index += 1
-            print('frame ' + filename + ' complete !')
+            if frame_id%32==0:
+                print('frame ' + filename + ' complete !')
+
+        evaluator.eval()
+
         if write_video:
             writer.release()
 
